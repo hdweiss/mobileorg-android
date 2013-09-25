@@ -59,6 +59,7 @@ dependencies {
     compile 'com.actionbarsherlock:actionbarsherlock:4.4.0@aar'
     compile 'com.android.support:support-v4:13.0.+'
     compile 'com.jcraft:jsch:0.1.50'
+    compile 'org.eclipse.jgit:org.eclipse.jgit:3.0.0.201306101825-r'
     compile project(':libraries:locale')
     compile fileTree(dir: 'libs', include: '*.jar')
 }

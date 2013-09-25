@@ -67,7 +67,7 @@ public class AgendasFragment extends SherlockFragment {
 //		//transaction.show(blockFragment);
 //		transaction.addToBackStack(getTag());
 //		
-//		transaction.commit();
+//		transaction.commitAllChanges();
 		
 		Intent intent = new Intent(getActivity(), AgendaActivity.class);
 		intent.putExtra(AgendaActivity.POSITION, position);
