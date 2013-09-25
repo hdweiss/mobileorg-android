@@ -11,14 +11,16 @@ import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.MergeCommand;
 import org.eclipse.jgit.api.MergeResult;
 import org.eclipse.jgit.api.errors.GitAPIException;
-import org.eclipse.jgit.api.errors.TransportException;
 import org.eclipse.jgit.internal.storage.file.FileRepository;
+import org.eclipse.jgit.lib.Ref;
+import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.transport.JschConfigSessionFactory;
 import org.eclipse.jgit.transport.OpenSshConfig;
 import org.eclipse.jgit.transport.SshSessionFactory;
 import org.eclipse.jgit.util.FS;
 
 import java.io.File;
+import java.util.Iterator;
 
 public class JGitWrapper {
 
@@ -78,13 +80,12 @@ public class JGitWrapper {
         git.commit().setMessage(commitMessage).setAuthor("Henning Weiss", "hdweiss@gmail.com").call();
     }
 
-    public void updateChanges() throws GitAPIException {
-        Log.d("JGitWrapper", "updateChanges()");
-        try {
-            git.fetch().setRemote(remotePath).call();
-        } catch (TransportException e) {
-            // Nothing to fetch
-        }
+    public void updateChanges() throws Exception {
+        git.fetch().call();
+
+        // TODO Check for local changes before pushing
+
+        Log.d("JGitWrapper", "Got sync state: " + getSyncState().name());
 
         switch(getSyncState()) {
             case Equal:
@@ -97,14 +98,18 @@ public class JGitWrapper {
 
             case Behind:
                 MergeResult result = git.merge().setFastForward(MergeCommand.FastForwardMode.FF_ONLY).call(); // TODO Set remote refs
-                if (result.getMergeStatus().isSuccessful() == false) {} // TODO Handle failure to merge
+                if (result.getMergeStatus().isSuccessful() == false) {
+                    throw new Exception("Merge failed");
+                } // TODO Handle failure to merge
                 break;
 
             case Diverged:
-                git.rebase().setUpstream(remotePath).call();
+                git.rebase().setUpstream("remotes/origin/master").call();
                 if (getSyncState() == SyncState.Ahead)
                     git.push().setRemote(remotePath).call();
-                else { } // TODO Handle unable to rebase
+                else {
+                    throw new Exception("Rebase failed");
+                } // TODO Handle unable to rebase
                 break;
         }
     }
@@ -113,10 +118,43 @@ public class JGitWrapper {
         Equal, Ahead, Behind, Diverged
     }
 
-    private SyncState getSyncState() {
-        return SyncState.Ahead;
+    private SyncState getSyncState() throws Exception {
+        Ref origin = git.getRepository().getRef("remotes/origin/master");
+        Ref head = git.getRepository().getRef("HEAD");
+
+        if (origin == null)
+            throw new Exception("origin not found!");
+
+        if (head == null)
+            throw new Exception("head not found!");
+
+        Iterable<RevCommit> call = git.log().addRange(origin.getObjectId(), head.getObjectId()).call();
+        int originToHead = countIterator(call.iterator());
+
+        Iterable<RevCommit> call2 = git.log().addRange(head.getObjectId(), origin.getObjectId()).call();
+        int headToOrigin = countIterator(call2.iterator());
+
+        Log.d("JGitWrapper", "origin->head: " + originToHead + " head->origin: " + headToOrigin);
+
+        if (originToHead == 0 && headToOrigin == 0)
+            return SyncState.Equal;
+        else if (originToHead == 0)
+            return SyncState.Behind;
+        else if (headToOrigin == 0)
+            return SyncState.Ahead;
+        else
+            return SyncState.Diverged;
     }
 
+    public static int countIterator(Iterator<?> iterator) {
+        int i = 0;
+        while(iterator.hasNext()) {
+            iterator.next();
+            i++;
+        }
+
+        return i;
+    }
 
     public static class JGitConfigSessionFactory extends JschConfigSessionFactory {
         private final String username;

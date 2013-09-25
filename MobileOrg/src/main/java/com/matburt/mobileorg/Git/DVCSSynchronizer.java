@@ -21,7 +21,7 @@ public class DVCSSynchronizer {
 
     public void sync() throws Exception {
         dvcs.commitAllChanges("Automatic commit");
-        dvcs.updateChanges(remotePath);
+        dvcs.updateChanges();
     }
 
     class DVCSSynchronizeTask extends SafeAsyncTask<Void, Void, Void> {

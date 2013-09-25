@@ -5,8 +5,6 @@ import android.test.AndroidTestCase;
 import com.matburt.mobileorg.Git.JGitWrapper;
 import com.matburt.mobileorg.test.util.TestUtils;
 
-import org.eclipse.jgit.api.errors.GitAPIException;
-
 import java.io.File;
 
 public class JGitWrapperTests extends AndroidTestCase {
@@ -38,7 +36,7 @@ public class JGitWrapperTests extends AndroidTestCase {
         assertTrue(jGitWrapper.getGit().branchList().call().size() > 0);
     }
 
-    public void testCommitAndPush() throws GitAPIException {
+    public void testCommitAndPush() throws Exception {
         String orgContents = TestUtils.readFileAsString(localPath + "/" + testFile);
         TestUtils.writeStringAsFile(orgContents + "\nmoretest", localPath + "/" + testFile);
         jGitWrapper.commitAllChanges("Automatic commit");
