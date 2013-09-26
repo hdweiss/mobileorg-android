@@ -10,9 +10,11 @@ import com.matburt.mobileorg.util.OrgUtils;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.MergeCommand;
 import org.eclipse.jgit.api.MergeResult;
+import org.eclipse.jgit.api.ResetCommand;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.internal.storage.file.FileRepository;
 import org.eclipse.jgit.lib.Ref;
+import org.eclipse.jgit.merge.MergeStrategy;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.transport.JschConfigSessionFactory;
 import org.eclipse.jgit.transport.OpenSshConfig;
@@ -27,12 +29,15 @@ public class JGitWrapper {
     private final String localPath;
     private final String remotePath;
 
+    private final MergeStrategy mergeStrategy;
+
     private final Git git;
 
     public JGitWrapper(String localPath, String remotePath) throws Exception {
         this.localPath = localPath;
         this.remotePath = remotePath;
 
+        this.mergeStrategy = MergeStrategy.OURS;
         setupJGitAuthentication();
         this.git = initGitRepo();
     }
@@ -83,11 +88,10 @@ public class JGitWrapper {
     public void updateChanges() throws Exception {
         git.fetch().call();
 
-        // TODO Check for local changes before pushing
-
-        Log.d("JGitWrapper", "Got sync state: " + getSyncState().name());
-
-        switch(getSyncState()) {
+        SyncState state = getSyncState();
+        Log.d("JGitWrapper", "Got sync state: " + state.name());
+        Ref fetchHead = git.getRepository().getRef("FETCH_HEAD");
+        switch(state) {
             case Equal:
                 // Do nothing
                 break;
@@ -97,19 +101,22 @@ public class JGitWrapper {
                 break;
 
             case Behind:
-                MergeResult result = git.merge().setFastForward(MergeCommand.FastForwardMode.FF_ONLY).call(); // TODO Set remote refs
+                MergeResult result = git.merge().include(fetchHead).setFastForward(MergeCommand.FastForwardMode.FF_ONLY).call(); // TODO Set remote refs
                 if (result.getMergeStatus().isSuccessful() == false) {
+                    git.reset().setMode(ResetCommand.ResetType.HARD).call();
                     throw new Exception("Merge failed");
-                } // TODO Handle failure to merge
+                }
                 break;
 
             case Diverged:
-                git.rebase().setUpstream("remotes/origin/master").call();
-                if (getSyncState() == SyncState.Ahead)
+                MergeResult mergeResult = git.merge().include(fetchHead).setStrategy(mergeStrategy).call();
+                if (mergeResult.getMergeStatus().isSuccessful()) {
                     git.push().setRemote(remotePath).call();
+                }
                 else {
+                    git.reset().setMode(ResetCommand.ResetType.HARD).call();
                     throw new Exception("Rebase failed");
-                } // TODO Handle unable to rebase
+                }
                 break;
         }
     }
@@ -119,22 +126,22 @@ public class JGitWrapper {
     }
 
     private SyncState getSyncState() throws Exception {
-        Ref origin = git.getRepository().getRef("remotes/origin/master");
+        Ref fetchHead = git.getRepository().getRef("FETCH_HEAD");
         Ref head = git.getRepository().getRef("HEAD");
 
-        if (origin == null)
-            throw new Exception("origin not found!");
+        if (fetchHead == null)
+            throw new Exception("fetchHead not found!");
 
         if (head == null)
             throw new Exception("head not found!");
 
-        Iterable<RevCommit> call = git.log().addRange(origin.getObjectId(), head.getObjectId()).call();
+        Iterable<RevCommit> call = git.log().addRange(fetchHead.getObjectId(), head.getObjectId()).call();
         int originToHead = countIterator(call.iterator());
 
-        Iterable<RevCommit> call2 = git.log().addRange(head.getObjectId(), origin.getObjectId()).call();
+        Iterable<RevCommit> call2 = git.log().addRange(head.getObjectId(), fetchHead.getObjectId()).call();
         int headToOrigin = countIterator(call2.iterator());
 
-        Log.d("JGitWrapper", "origin->head: " + originToHead + " head->origin: " + headToOrigin);
+        Log.d("JGitWrapper", "fetchHead->head: " + originToHead + " head->fetchHead: " + headToOrigin);
 
         if (originToHead == 0 && headToOrigin == 0)
             return SyncState.Equal;

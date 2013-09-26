@@ -1,6 +1,7 @@
 package com.matburt.mobileorg.test.util;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -11,9 +12,9 @@ public class TestUtils {
 
     public static void writeStringAsFile(final String fileContents, String fileName) {
         try {
-            FileWriter out = new FileWriter(new File(fileName));
-            out.write(fileContents);
-            out.close();
+            BufferedWriter writer = new BufferedWriter(new FileWriter(fileName));
+            writer.write(fileContents);
+            writer.close();
         } catch (IOException e) {
         }
     }
@@ -25,7 +26,7 @@ public class TestUtils {
 
         try {
             in = new BufferedReader(new FileReader(new File(fileName)));
-            while ((line = in.readLine()) != null) stringBuilder.append(line);
+            while ((line = in.readLine()) != null) stringBuilder.append(line).append("\n");
 
         } catch (FileNotFoundException e) {
         } catch (IOException e) {
